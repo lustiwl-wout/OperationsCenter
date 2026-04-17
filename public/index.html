@@ -18,9 +18,7 @@
   <header class="topbar">
     <div class="topbar-main">
       <div class="brand">
-        <div class="brand-logo" aria-hidden="true">
-          <span>OC</span>
-        </div>
+        <div class="brand-logo" aria-hidden="true"><span>OC</span></div>
         <div class="brand-pill">Operations Center</div>
       </div>
 
@@ -58,12 +56,12 @@
   <section id="p1-banner" class="p1-banner hidden" role="alert" aria-live="assertive">
     <div class="p1-banner-inner">
       <div class="p1-siren" aria-hidden="true">
-        <svg viewBox="0 0 24 24" width="42" height="42">
+        <svg viewBox="0 0 24 24" width="24" height="24">
           <path fill="currentColor" d="M12 2a7 7 0 0 0-7 7v4H3v3h18v-3h-2V9a7 7 0 0 0-7-7Zm-2 18a2 2 0 1 0 4 0h-4Z"/>
         </svg>
       </div>
       <div class="p1-banner-text">
-        <div class="p1-label">PRIORITY 1 · IMMEDIATE ACTION</div>
+        <div class="p1-label">Priority 1 · Immediate action</div>
         <div class="p1-title" id="p1-title">—</div>
         <div class="p1-meta" id="p1-meta">—</div>
       </div>
@@ -72,45 +70,79 @@
   </section>
 
   <main class="layout">
-    <!-- KPI strip -->
-    <section class="kpi-strip">
-      <div class="kpi-card" data-tone="p1">
-        <div class="kpi-card-label">P1 Active</div>
-        <div class="kpi-card-value" id="kpi-p1">0</div>
-        <div class="kpi-card-foot">Critical incidents</div>
+    <!-- Hero panel: donut + headline + compact stats + 24h timeline -->
+    <section class="hero" id="hero" data-status="healthy">
+      <div class="hero-left">
+        <div class="donut" aria-hidden="true">
+          <svg viewBox="0 0 120 120" width="120" height="120" id="donut-svg">
+            <circle cx="60" cy="60" r="48" fill="none" stroke="var(--border)" stroke-width="10"/>
+            <g id="donut-segments"></g>
+          </svg>
+          <div class="donut-center">
+            <div class="donut-main"><span id="donut-healthy">0</span><span class="donut-of">/<span id="donut-total">15</span></span></div>
+            <div class="donut-sub">healthy</div>
+          </div>
+        </div>
+
+        <div class="hero-text">
+          <div class="hero-eyebrow" id="hero-eyebrow">Overall status</div>
+          <div class="hero-headline" id="hero-headline">Checking…</div>
+          <div class="hero-sub" id="hero-sub">—</div>
+        </div>
       </div>
-      <div class="kpi-card" data-tone="p2">
-        <div class="kpi-card-label">P2 Active</div>
-        <div class="kpi-card-value" id="kpi-p2">0</div>
-        <div class="kpi-card-foot">High priority</div>
+
+      <div class="hero-stats">
+        <div class="mini-stat" data-tone="p1">
+          <div class="mini-stat-label">Priority 1</div>
+          <div class="mini-stat-value" id="stat-p1">0</div>
+        </div>
+        <div class="mini-stat" data-tone="p2">
+          <div class="mini-stat-label">Priority 2</div>
+          <div class="mini-stat-value" id="stat-p2">0</div>
+        </div>
+        <div class="mini-stat" data-tone="p3">
+          <div class="mini-stat-label">Priority 3</div>
+          <div class="mini-stat-value" id="stat-p3">0</div>
+        </div>
+        <div class="mini-stat" data-tone="ok">
+          <div class="mini-stat-label">MTTR · 24h</div>
+          <div class="mini-stat-value"><span id="stat-mttr">—</span><span class="mini-stat-unit">m</span></div>
+        </div>
       </div>
-      <div class="kpi-card" data-tone="p3">
-        <div class="kpi-card-label">P3 / Notices</div>
-        <div class="kpi-card-value" id="kpi-p3">0</div>
-        <div class="kpi-card-foot">Informational</div>
-      </div>
-      <div class="kpi-card" data-tone="ok">
-        <div class="kpi-card-label">Tools Healthy</div>
-        <div class="kpi-card-value"><span id="kpi-healthy">0</span><span class="kpi-of">/<span id="kpi-total">15</span></span></div>
-        <div class="kpi-card-foot">Integrations reporting OK</div>
-      </div>
-      <div class="kpi-card" data-tone="info">
-        <div class="kpi-card-label">Open Incidents</div>
-        <div class="kpi-card-value" id="kpi-incidents">0</div>
-        <div class="kpi-card-foot">Across all sources</div>
-      </div>
-      <div class="kpi-card" data-tone="info">
-        <div class="kpi-card-label">MTTR (24h)</div>
-        <div class="kpi-card-value"><span id="kpi-mttr">—</span><span class="kpi-of">m</span></div>
-        <div class="kpi-card-foot">Mean time to resolve</div>
+
+      <div class="hero-timeline">
+        <div class="hero-timeline-head">
+          <span class="hero-timeline-title">Incidents · last 24h</span>
+          <div class="hero-timeline-legend">
+            <span class="leg p1"><i></i>P1</span>
+            <span class="leg p2"><i></i>P2</span>
+            <span class="leg p3"><i></i>P3</span>
+          </div>
+        </div>
+        <div id="timeline-chart" class="timeline-chart"></div>
       </div>
     </section>
 
-    <!-- Main grid: tools wall + alerts feed -->
+    <!-- Needs-attention zone: only rendered when critical/warning tools exist -->
+    <section class="panel attention-panel hidden" id="attention-panel">
+      <div class="panel-head">
+        <div class="panel-title">
+          <span class="panel-title-dot crit"></span>
+          Needs attention
+        </div>
+        <div class="panel-sub" id="attention-count">0 sources</div>
+      </div>
+      <div class="attention-grid" id="attention-grid"></div>
+    </section>
+
+    <!-- Main grid: operational tiles + live alerts feed -->
     <section class="main-grid">
-      <div class="panel tools-panel">
+      <div class="panel operational-panel">
         <div class="panel-head">
-          <div class="panel-title">Monitoring Sources</div>
+          <div class="panel-title">
+            <span class="panel-title-dot ok"></span>
+            All sources
+          </div>
           <div class="panel-legend">
             <span class="legend-item"><span class="legend-dot ok"></span>Healthy</span>
             <span class="legend-item"><span class="legend-dot notice"></span>Notice</span>
@@ -118,12 +150,12 @@
             <span class="legend-item"><span class="legend-dot critical"></span>Critical</span>
           </div>
         </div>
-        <div class="tools-grid" id="tools-grid"><!-- cards injected here --></div>
+        <div class="tiles-grid" id="tiles-grid"><!-- tiles injected here --></div>
       </div>
 
       <aside class="panel alerts-panel">
         <div class="panel-head">
-          <div class="panel-title">Live Alert Feed</div>
+          <div class="panel-title">Live alert feed</div>
           <div class="panel-sub mono" id="alerts-count">0 open</div>
         </div>
         <div class="alerts-list" id="alerts-list"><!-- alerts injected here --></div>
@@ -133,11 +165,11 @@
 
   <footer class="footer">
     <div class="footer-left">
-      <span class="mono">OC // v0.1.0</span>
+      <span class="mono">OC · v0.1.0</span>
       <span class="sep">·</span>
-      <span>Hosting: Render</span>
+      <span>Render</span>
       <span class="sep">·</span>
-      <span>Store: Neon Postgres</span>
+      <span>Neon Postgres</span>
     </div>
     <div class="footer-right mono">
       <span id="tick-indicator" class="tick-dot" aria-hidden="true"></span>
