@@ -3,6 +3,7 @@ const path = require('path');
 const { getSnapshot } = require('./src/data');
 const { migrate } = require('./src/db');
 const topology = require('./src/topology');
+const { seedDefaults } = require('./src/seed-data');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -27,6 +28,12 @@ app.get('/api/snapshot', async (_req, res, next) => {
 app.get('/api/topology', async (_req, res, next) => {
   try {
     res.json(await topology.getTopology());
+  } catch (err) { next(err); }
+});
+
+app.post('/api/topology/seed', async (_req, res, next) => {
+  try {
+    res.json(await seedDefaults());
   } catch (err) { next(err); }
 });
 

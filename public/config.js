@@ -261,6 +261,25 @@ $('dep-list').addEventListener('click', async (e) => {
   }
 });
 
+$('seed-btn').addEventListener('click', async (e) => {
+  const btn = e.currentTarget;
+  if (!confirm('Load the default wholesaler topology? Existing rows are kept — only missing levels, processes, and lines get added.')) return;
+  btn.disabled = true;
+  const prev = btn.textContent;
+  btn.textContent = 'Loading…';
+  try {
+    const summary = await api('POST', '/api/topology/seed');
+    await loadAll();
+    const msg = `Added ${summary.tiers.inserted} level(s), ${summary.services.inserted} process(es), ${summary.dependencies.inserted} line(s)`;
+    toast(msg);
+  } catch (err) {
+    toast(err.message, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = prev;
+  }
+});
+
 // ---------- boot ----------
 
 loadAll().catch(err => toast(err.message, 'error'));

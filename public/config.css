@@ -160,6 +160,15 @@
   font-style: italic;
 }
 
+.cfg-seed-btn {
+  font: inherit;
+  font-weight: 600;
+  font-size: 13px;
+  cursor: pointer;
+  background: transparent;
+}
+.cfg-seed-btn:disabled { opacity: 0.6; cursor: default; }
+
 .cfg-toast {
   position: fixed;
   right: 20px; bottom: 20px;
