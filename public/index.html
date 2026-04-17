@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <meta name="theme-color" content="#05070d" />
+  <meta name="theme-color" content="#00913F" />
   <title>Operations Center — Aggregated Monitoring</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -16,35 +16,42 @@
   <div id="p1-frame" class="p1-frame" aria-hidden="true"></div>
 
   <header class="topbar">
-    <div class="brand">
-      <div class="brand-mark" aria-hidden="true">
-        <span class="brand-dot"></span>
+    <div class="topbar-main">
+      <div class="brand">
+        <div class="brand-logo" aria-hidden="true">
+          <span>OC</span>
+        </div>
+        <div class="brand-pill">Operations Center</div>
       </div>
-      <div class="brand-text">
-        <div class="brand-title">OPERATIONS CENTER</div>
-        <div class="brand-sub">Aggregated Monitoring · 15 sources</div>
+
+      <div class="status-pill" id="overall-pill">
+        <span class="status-dot"></span>
+        <span class="status-label" id="overall-label">Loading…</span>
+      </div>
+
+      <div class="topbar-right">
+        <div class="header-btn" title="Local time">
+          <div class="header-btn-label">Local</div>
+          <div class="header-btn-value mono" id="clock">--:--:--</div>
+        </div>
+        <div class="header-btn" title="UTC time">
+          <div class="header-btn-label">UTC</div>
+          <div class="header-btn-value mono" id="clock-utc">--:--:--</div>
+        </div>
+        <div class="header-btn" title="Last sync">
+          <div class="header-btn-label">Last sync</div>
+          <div class="header-btn-value mono" id="last-sync">—</div>
+        </div>
       </div>
     </div>
 
-    <div class="status-pill" id="overall-pill">
-      <span class="status-dot"></span>
-      <span class="status-label" id="overall-label">LOADING</span>
-    </div>
-
-    <div class="topbar-right">
-      <div class="kpi">
-        <div class="kpi-label">Local time</div>
-        <div class="kpi-value mono" id="clock">--:--:--</div>
-      </div>
-      <div class="kpi">
-        <div class="kpi-label">UTC</div>
-        <div class="kpi-value mono" id="clock-utc">--:--:--</div>
-      </div>
-      <div class="kpi">
-        <div class="kpi-label">Last sync</div>
-        <div class="kpi-value mono" id="last-sync">—</div>
-      </div>
-    </div>
+    <nav class="topbar-nav" aria-label="Dashboard sections">
+      <a class="nav-link active" href="#overview">Overview</a>
+      <a class="nav-link" href="#sources">Monitoring sources</a>
+      <a class="nav-link" href="#alerts">Alerts</a>
+      <a class="nav-link" href="#incidents">Incidents</a>
+      <span class="nav-sub">Aggregated monitoring · 15 sources</span>
+    </nav>
   </header>
 
   <!-- P1 banner: hidden unless there's a live P1 incident -->
