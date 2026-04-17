@@ -1,23 +1,25 @@
-// Operations Center — minimal wall display.
-// All-clear = breathing dot, nothing else.
-// Incidents = canvas constellation of impacted nodes + minimal list.
+// Operations Center — topology wall display.
+// Primary visual: a service-topology SVG.
+//   - Services laid out in tiers (Edge → API → Services → Async → Data)
+//   - Dependency lines connect them
+//   - Healthy = calm, impacted = colored, critical = red + glowing + animated
+//     dependency path, tool badges attached to the failing nodes
+//   - Right rail lists active incidents (minimal, color-coded)
 
 const REFRESH_MS = 5000;
 
 const $ = id => document.getElementById(id);
 const pad = n => String(n).padStart(2, '0');
 
-const SEV_COLOR = { P1: '#F85149', P2: '#D29922', P3: '#388BFD' };
-
-const NODE_COLORS = {
-  tool:     '#E6EDF3',
-  service:  '#8B949E',
-  cascade:  '#484F58',
-  region:   '#388BFD',
-  reporter: '#8B949E',
+const STATUS_COLOR = {
+  healthy:  '#00913F',
+  impacted: '#D97706',
+  notice:   '#2563EB',
+  warning:  '#D97706',
+  critical: '#DC2626',
 };
 
-// ---- Clock ----
+// ----- clock -----
 function startClock() {
   const el = $('clock');
   const tick = () => {
@@ -28,331 +30,228 @@ function startClock() {
   setInterval(tick, 1000);
 }
 
-// ---- Bar status ----
-function renderBar(snap) {
-  const bar = $('bar-status');
-  bar.setAttribute('data-status', snap.overall);
-  $('bar-label').textContent = {
+// ----- overall pill -----
+function renderOverall(snap) {
+  const pill = $('overall-pill');
+  pill.setAttribute('data-status', snap.overall);
+  $('overall-label').textContent = {
     healthy:  'All clear',
     notice:   'Notices',
     warning:  'Elevated',
-    critical: `${snap.totals.p1} critical`,
+    critical: snap.totals.p1 > 1 ? `${snap.totals.p1} critical` : 'Critical',
   }[snap.overall] ?? snap.overall;
 }
 
-// ---- Toggle views ----
-function showAllClear() {
-  $('all-clear').classList.remove('hidden');
-  $('stage').classList.add('hidden');
-}
-function showStage() {
-  $('all-clear').classList.add('hidden');
-  $('stage').classList.remove('hidden');
-}
-
-// ---- Relative time ----
+// ----- rel time -----
 function relTime(iso) {
   const s = (Date.now() - new Date(iso).getTime()) / 1000;
-  if (s < 60)    return `${Math.floor(s)}s`;
-  if (s < 3600)  return `${Math.floor(s / 60)}m`;
+  if (s < 60)   return `${Math.floor(s)}s`;
+  if (s < 3600) return `${Math.floor(s / 60)}m`;
   return `${Math.floor(s / 3600)}h`;
 }
 
-// ---- Incident list (right panel) ----
-function renderList(alerts) {
-  $('incident-list').innerHTML = alerts.map(a => {
-    const chips = [
-      `<span class="chip tool" style="border-color:${a.toolColor}44;color:${a.toolColor}">${a.tool}</span>`,
-      `<span class="chip svc">${a.service}</span>`,
-      ...a.affectedRegions.map(r => `<span class="chip region">${r}</span>`),
-    ].join('');
-    return `
-      <div class="inc-row" data-sev="${a.severity}" data-id="${a.id}">
-        <div class="inc-top">
-          <span class="sev-dot"></span>
-          <span class="inc-sev">${a.severity}</span>
-          <span class="inc-title">${a.title}</span>
-          <span class="inc-time">${relTime(a.openedAt)}</span>
-        </div>
-        <div class="inc-chips">${chips}</div>
-      </div>`;
-  }).join('');
-}
+// ----- topology renderer -----
+function renderTopology(snap) {
+  const svg = $('topology');
+  const wrap = svg.parentElement;
+  const cw = wrap.clientWidth - 48; // padding
+  const ch = wrap.clientHeight - 48;
 
-// ================================================================
-// CONSTELLATION — canvas-based impact map
-// ================================================================
+  // Layout constants
+  const NODE_W = 128;
+  const NODE_H = 52;
+  const tiers = snap.tierLabels;
+  const nTiers = tiers.length;
+  const tierGap = 28;
+  const tierHeight = (ch - (nTiers - 1) * tierGap) / nTiers;
 
-// Layout: incidents are placed in a column on the left of the canvas.
-// For each incident a sub-graph fans out rightward:
-//   col 0 (leftmost):  tool node (the source)
-//   col 1:             directly affected services
-//   col 2:             cascading services
-//   col 3 (rightmost): regions
-//
-// Nodes are linked by curved lines. Severity colours the source node.
-// Healthy nodes that appear in no incident are not drawn.
+  // Group services by tier
+  const byTier = tiers.map((_, i) => snap.services.filter(s => s.tier === i));
 
-const NODE_R = { tool: 22, service: 14, cascade: 10, region: 10 };
-const FONT = { tool: 10, service: 9, cascade: 8, region: 8 };
+  // Compute x positions per tier — centered horizontally
+  const nodePositions = {};
+  byTier.forEach((group, tier) => {
+    const n = group.length;
+    const totalW = n * NODE_W + (n - 1) * 32;
+    const startX = (cw - totalW) / 2 + 90; // offset for tier labels
+    group.forEach((s, i) => {
+      nodePositions[s.id] = {
+        x: startX + i * (NODE_W + 32),
+        y: 12 + tier * (tierHeight + tierGap) + (tierHeight - NODE_H) / 2,
+        w: NODE_W, h: NODE_H,
+      };
+    });
+  });
 
-let animFrame = null;
-let particles = []; // ambient floating sparks
+  const viewW = cw + 48;
+  const viewH = ch + 48;
+  svg.setAttribute('viewBox', `0 0 ${viewW} ${viewH}`);
+  svg.setAttribute('width', viewW);
+  svg.setAttribute('height', viewH);
 
-function buildGraph(alerts) {
-  // Collect unique nodes and edges.
-  const nodes = new Map();   // key → node
+  // ---- build SVG contents ----
+  const parts = [];
+
+  // Tier dividers + labels
+  tiers.forEach((label, i) => {
+    const y = 12 + i * (tierHeight + tierGap) + tierHeight / 2;
+    parts.push(`<text class="tier-label" x="16" y="${y}" dominant-baseline="middle">${label}</text>`);
+    if (i < tiers.length - 1) {
+      const dy = 12 + i * (tierHeight + tierGap) + tierHeight + tierGap / 2;
+      parts.push(`<line class="tier-divider" x1="90" y1="${dy}" x2="${viewW - 20}" y2="${dy}"/>`);
+    }
+  });
+
+  // Build edge list (service -> dep)
+  const svcById = Object.fromEntries(snap.services.map(s => [s.id, s]));
   const edges = [];
+  snap.services.forEach(s => {
+    s.deps.forEach(d => {
+      if (!svcById[d]) return;
+      edges.push({ from: s.id, to: d });
+    });
+  });
 
-  function addNode(key, type, label, color, sev) {
-    if (!nodes.has(key)) {
-      nodes.set(key, {
-        key, type, label,
-        color: color || NODE_COLORS[type],
-        sev: sev || null,
-        x: 0, y: 0,
-        // target position (animated toward)
-        tx: 0, ty: 0,
+  // Classify each edge: does it carry impact?
+  // An edge is "impacted-crit" if the target is critical and the source is
+  // downstream (impacted/critical). "impacted-warn" for warning/impacted.
+  function edgeClass(from, to) {
+    const src = svcById[from];
+    const dst = svcById[to];
+    if (!src || !dst) return '';
+    const srcBroken = ['critical','warning','notice','impacted'].includes(src.status);
+    const dstFailing = ['critical','warning','notice'].includes(dst.status);
+    if (!srcBroken || !dstFailing) return '';
+    if (dst.status === 'critical') return 'impacted-crit';
+    return 'impacted-warn';
+  }
+
+  // Draw edges first (below nodes). Dependents point DOWN to their deps.
+  edges.forEach(e => {
+    const a = nodePositions[e.from];
+    const b = nodePositions[e.to];
+    if (!a || !b) return;
+    const ax = a.x + a.w / 2;
+    const ay = a.y + a.h;
+    const bx = b.x + b.w / 2;
+    const by = b.y;
+    const mx1 = ax;
+    const my1 = ay + (by - ay) / 2;
+    const mx2 = bx;
+    const my2 = ay + (by - ay) / 2;
+    const cls = edgeClass(e.from, e.to);
+    parts.push(`<path class="edge-path ${cls}" d="M ${ax} ${ay} C ${mx1} ${my1}, ${mx2} ${my2}, ${bx} ${by}"/>`);
+  });
+
+  // Draw nodes
+  snap.services.forEach(s => {
+    const p = nodePositions[s.id];
+    if (!p) return;
+    const cx = p.x + p.w / 2;
+    const cy = p.y + p.h / 2;
+
+    // Ping ring for critical nodes
+    let ping = '';
+    if (s.status === 'critical') {
+      ping = `<rect class="node-ping" x="${p.x}" y="${p.y}" width="${p.w}" height="${p.h}" rx="12" ry="12"/>`;
+    }
+
+    // Node body
+    const bg = `<rect class="node-bg" x="${p.x}" y="${p.y}" width="${p.w}" height="${p.h}" rx="12" ry="12"/>`;
+    const statusBar = `<rect class="node-status-bar" x="${p.x + 10}" y="${p.y + p.h - 6}" width="${p.w - 20}" height="3" rx="1.5"/>`;
+    const label = `<text class="node-label" x="${cx}" y="${cy - 2}">${s.label}</text>`;
+
+    // Tool badges (only for directly failing nodes — cluster at top-right)
+    let badges = '';
+    if (s.incident) {
+      const reporters = [{ icon: s.incident.toolIcon, color: s.incident.toolColor }, ...s.incident.reporters];
+      const br = 10; // badge radius
+      reporters.slice(0, 3).forEach((t, i) => {
+        const bx = p.x + p.w - 6 - i * (br * 2 - 4);
+        const by = p.y - 4;
+        badges += `
+          <g class="tool-badge" transform="translate(${bx}, ${by})">
+            <circle class="tool-badge-bg" cx="0" cy="0" r="${br}" style="fill: ${t.color}"/>
+            <text class="tool-badge-label" x="0" y="0" fill="#fff">${t.icon}</text>
+          </g>`;
       });
     }
-  }
 
-  alerts.forEach(a => {
-    const toolKey = `tool:${a.toolId}`;
-    addNode(toolKey, 'tool', a.tool, a.toolColor, a.severity);
-
-    const svcKey = `svc:${a.service}`;
-    addNode(svcKey, 'service', a.service.replace(/-/g, '\u2011'), null, a.severity);
-    edges.push({ from: toolKey, to: svcKey, sev: a.severity });
-
-    a.affectedServices.forEach(s => {
-      const k = `svc:${s}`;
-      addNode(k, 'service', s.replace(/-/g, '\u2011'), null, null);
-      edges.push({ from: svcKey, to: k, sev: a.severity });
-    });
-
-    a.cascadeServices.forEach(s => {
-      const k = `cas:${s}`;
-      addNode(k, 'cascade', s.replace(/-/g, '\u2011'), null, null);
-      edges.push({ from: `svc:${a.affectedServices[0] ?? a.service}`, to: k, sev: null });
-    });
-
-    a.affectedRegions.forEach(r => {
-      const k = `reg:${r}`;
-      addNode(k, 'region', r, null, null);
-      edges.push({ from: svcKey, to: k, sev: null });
-    });
-
-    // Sibling reporters
-    a.reportedBy.forEach(t => {
-      const k = `tool:${t.id}`;
-      addNode(k, 'reporter', t.name, t.color, a.severity);
-      edges.push({ from: toolKey, to: k, sev: null });
-    });
+    parts.push(`<g class="node" data-status="${s.status}" data-id="${s.id}">${ping}${bg}${statusBar}${label}${badges}</g>`);
   });
 
-  return { nodes: [...nodes.values()], edges };
+  svg.innerHTML = parts.join('');
 }
 
-function layoutGraph(nodes, edges, cw, ch) {
-  // Assign columns by type.
-  const colX = {
-    tool:     cw * 0.12,
-    reporter: cw * 0.12,
-    service:  cw * 0.38,
-    cascade:  cw * 0.62,
-    region:   cw * 0.82,
-  };
+// ----- rail -----
+function renderRail(snap) {
+  const rail = $('rail');
+  const list = $('rail-list');
+  const count = $('rail-count');
 
-  // Count nodes per column to spread them vertically.
-  const cols = {};
-  nodes.forEach(n => {
-    const cx = colX[n.type] ?? cw * 0.5;
-    if (!cols[cx]) cols[cx] = [];
-    cols[cx].push(n);
-  });
+  rail.setAttribute('data-overall', snap.overall);
 
-  const padY = 80;
-  Object.entries(cols).forEach(([cx, group]) => {
-    const step = (ch - padY * 2) / Math.max(group.length, 1);
-    group.forEach((n, i) => {
-      n.tx = parseFloat(cx);
-      n.ty = padY + i * step + step / 2;
-      // Init position if first render.
-      if (n.x === 0) { n.x = n.tx; n.y = n.ty; }
-    });
-  });
-}
-
-function drawEdge(ctx, a, b, sev) {
-  const color = sev ? SEV_COLOR[sev] : 'rgba(255,255,255,0.06)';
-  const mid = (a.x + b.x) / 2;
-  ctx.beginPath();
-  ctx.moveTo(a.x, a.y);
-  ctx.bezierCurveTo(mid, a.y, mid, b.y, b.x, b.y);
-  ctx.strokeStyle = sev ? color.replace(')', ',0.35)').replace('rgb', 'rgba') : color;
-  ctx.lineWidth = sev ? 1.2 : 0.6;
-  ctx.stroke();
-}
-
-// Convert hex to rgba for glow.
-function hexAlpha(hex, a) {
-  const r = parseInt(hex.slice(1, 3), 16);
-  const g = parseInt(hex.slice(3, 5), 16);
-  const b = parseInt(hex.slice(5, 7), 16);
-  return `rgba(${r},${g},${b},${a})`;
-}
-
-function drawNode(ctx, n, t) {
-  const r = NODE_R[n.type] ?? 12;
-  const col = n.sev ? SEV_COLOR[n.sev] : n.color;
-
-  // Glow for critical/warning nodes.
-  if (n.sev === 'P1') {
-    const pulse = 0.5 + 0.5 * Math.sin(t * 0.003);
-    const g = ctx.createRadialGradient(n.x, n.y, r, n.x, n.y, r * 3.5);
-    g.addColorStop(0, hexAlpha(col, 0.35 * pulse));
-    g.addColorStop(1, hexAlpha(col, 0));
-    ctx.beginPath();
-    ctx.arc(n.x, n.y, r * 3.5, 0, Math.PI * 2);
-    ctx.fillStyle = g;
-    ctx.fill();
+  if (snap.incidents.length === 0) {
+    rail.setAttribute('data-empty', 'true');
+    count.textContent = '0';
+    list.innerHTML = '';
+    return;
   }
 
-  // Node fill.
-  ctx.beginPath();
-  ctx.arc(n.x, n.y, r, 0, Math.PI * 2);
-  ctx.fillStyle = n.sev === 'P1' ? col :
-                  n.sev === 'P2' ? col :
-                  hexAlpha(n.color, 0.15);
-  ctx.fill();
+  rail.setAttribute('data-empty', 'false');
+  count.textContent = snap.incidents.length;
 
-  // Node border.
-  ctx.strokeStyle = n.sev ? col : hexAlpha(n.color, 0.35);
-  ctx.lineWidth = n.sev ? 1.5 : 1;
-  ctx.stroke();
-
-  // Label.
-  ctx.fillStyle = n.sev ? '#fff' : NODE_COLORS[n.type];
-  ctx.font = `${n.sev ? 600 : 400} ${FONT[n.type] ?? 9}px Inter, sans-serif`;
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  // Truncate long labels.
-  const maxLen = n.type === 'tool' ? 5 : 11;
-  const label = n.label.length > maxLen ? n.label.slice(0, maxLen) + '…' : n.label;
-  ctx.fillText(label, n.x, n.y);
+  list.innerHTML = snap.incidents.map(inc => `
+    <div class="inc-card" data-sev="${inc.severity}">
+      <div class="inc-top">
+        <span class="inc-sev">${inc.severity}</span>
+        <span class="inc-time">${relTime(inc.openedAt)}</span>
+      </div>
+      <div class="inc-title">${inc.title}</div>
+      <div class="inc-meta">
+        <span class="tool-tag" style="border-color: ${inc.toolColor}55">
+          <span class="tool-tag-dot" style="background: ${inc.toolColor}"></span>
+          ${inc.toolName}
+        </span>
+        <span class="region-tag">${inc.region}</span>
+      </div>
+    </div>
+  `).join('');
 }
 
-function drawParticles(ctx, t, cw, ch) {
-  // Slowly drift ambient particles across the canvas.
-  particles.forEach(p => {
-    p.x += p.vx;
-    p.y += p.vy;
-    if (p.x > cw + 10) p.x = -10;
-    if (p.y > ch + 10) p.y = -10;
-    const alpha = 0.08 + 0.04 * Math.sin(t * 0.001 + p.phase);
-    ctx.beginPath();
-    ctx.arc(p.x, p.y, 1, 0, Math.PI * 2);
-    ctx.fillStyle = `rgba(255,255,255,${alpha})`;
-    ctx.fill();
-  });
+// ----- sync indicator -----
+function markSync(ok) {
+  const el = $('sync-text');
+  el.textContent = ok ? 'live' : 'offline';
+  $('sync-chip').style.opacity = ok ? '1' : '0.6';
 }
 
-function initParticles(cw, ch) {
-  particles = Array.from({ length: 60 }, (_, i) => ({
-    x: Math.random() * cw,
-    y: Math.random() * ch,
-    vx: 0.08 + Math.random() * 0.12,
-    vy: 0.04 + Math.random() * 0.06,
-    phase: Math.random() * Math.PI * 2,
-  }));
-}
+// ----- refresh loop -----
+let lastSnap = null;
 
-let graph = { nodes: [], edges: [] };
-
-function startConstellation() {
-  const canvas = $('constellation');
-  const ctx = canvas.getContext('2d');
-  let t = 0;
-
-  function resize() {
-    const rect = canvas.parentElement.getBoundingClientRect();
-    canvas.width  = rect.width;
-    canvas.height = rect.height;
-    initParticles(canvas.width, canvas.height);
-    layoutGraph(graph.nodes, graph.edges, canvas.width, canvas.height);
-  }
-  resize();
-  window.addEventListener('resize', resize);
-
-  function draw() {
-    const cw = canvas.width, ch = canvas.height;
-    ctx.clearRect(0, 0, cw, ch);
-
-    // Background.
-    ctx.fillStyle = '#0D1117';
-    ctx.fillRect(0, 0, cw, ch);
-
-    drawParticles(ctx, t, cw, ch);
-
-    // Smooth nodes toward target positions.
-    graph.nodes.forEach(n => {
-      n.x += (n.tx - n.x) * 0.06;
-      n.y += (n.ty - n.y) * 0.06;
-    });
-
-    // Build a lookup for edge drawing.
-    const byKey = Object.fromEntries(graph.nodes.map(n => [n.key, n]));
-
-    // Edges first (below nodes).
-    graph.edges.forEach(e => {
-      const a = byKey[e.from], b = byKey[e.to];
-      if (a && b) drawEdge(ctx, a, b, e.sev);
-    });
-
-    // Nodes on top.
-    graph.nodes.forEach(n => drawNode(ctx, n, t));
-
-    t++;
-    animFrame = requestAnimationFrame(draw);
-  }
-
-  draw();
-}
-
-// ---- Refresh loop ----
 async function refresh() {
-  const sync = $('bar-sync');
   try {
     const res = await fetch('/api/snapshot', { cache: 'no-store' });
     if (!res.ok) throw new Error('bad status');
     const snap = await res.json();
+    lastSnap = snap;
 
-    renderBar(snap);
-    sync.textContent = '● live';
-    sync.classList.add('live');
-
-    if (snap.overall === 'healthy') {
-      showAllClear();
-    } else {
-      // Sort P1 first, then P2, then P3.
-      snap.alerts.sort((a, b) => a.severity.localeCompare(b.severity));
-      renderList(snap.alerts);
-      graph = buildGraph(snap.alerts);
-      const canvas = $('constellation');
-      if (canvas) {
-        const rect = canvas.parentElement?.getBoundingClientRect();
-        if (rect) layoutGraph(graph.nodes, graph.edges, rect.width, rect.height);
-      }
-      showStage();
-    }
-  } catch {
-    sync.textContent = '○ offline';
-    sync.classList.remove('live');
+    renderOverall(snap);
+    renderTopology(snap);
+    renderRail(snap);
+    markSync(true);
+  } catch (e) {
+    markSync(false);
+    console.error(e);
   }
 }
 
 startClock();
-startConstellation();
 refresh();
 setInterval(refresh, REFRESH_MS);
+
+let resizeTimer = null;
+window.addEventListener('resize', () => {
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(() => { if (lastSnap) renderTopology(lastSnap); }, 120);
+});

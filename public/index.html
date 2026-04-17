@@ -7,45 +7,46 @@
   <title>Operations Center</title>
   <link rel="preconnect" href="https://fonts.googleapis.com"/>
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500&display=swap"/>
+  <link rel="stylesheet"
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&display=swap"/>
   <link rel="stylesheet" href="/styles.css"/>
 </head>
 <body>
 
-  <!-- Minimal top bar -->
-  <header class="bar">
-    <div class="bar-brand">
-      <span class="bar-logo">OC</span>
-      <span class="bar-name">Operations Center</span>
+  <!-- TU-style top bar -->
+  <header class="topbar">
+    <div class="brand">
+      <div class="brand-logo">OC</div>
+      <div class="brand-pill">Operations Center</div>
     </div>
-    <div class="bar-status" id="bar-status" data-status="healthy">
-      <span class="bar-dot"></span>
-      <span id="bar-label">—</span>
+
+    <div class="overall-pill" id="overall-pill" data-status="healthy">
+      <span class="overall-dot"></span>
+      <span class="overall-label" id="overall-label">All clear</span>
     </div>
-    <div class="bar-meta">
-      <span class="mono" id="clock">—</span>
-      <span class="bar-sync mono" id="bar-sync">·</span>
+
+    <div class="bar-right">
+      <div class="bar-chip"><span class="mono" id="clock">—</span></div>
+      <div class="bar-chip" id="sync-chip"><span class="sync-dot"></span><span id="sync-text">live</span></div>
     </div>
   </header>
 
-  <!-- ALL-CLEAR state: shown when overall === healthy -->
-  <div class="all-clear" id="all-clear">
-    <div class="pulse-ring" aria-hidden="true"></div>
-    <div class="all-clear-dot" aria-hidden="true"></div>
-    <p class="all-clear-label">All clear</p>
-  </div>
-
-  <!-- INCIDENT state: shown when there are any P1 / P2 / P3 alerts -->
-  <main class="stage hidden" id="stage">
-
-    <!-- Incident constellation: SVG drawn by JS -->
-    <section class="constellation-wrap">
-      <canvas id="constellation" aria-label="Incident impact map"></canvas>
+  <!-- Main stage: topology on the left, incident rail on the right -->
+  <main class="stage">
+    <section class="topology-wrap">
+      <svg id="topology" class="topology" preserveAspectRatio="xMidYMid meet"></svg>
     </section>
-
-    <!-- Incident list: minimal — one row per open incident, no body text -->
-    <aside class="incident-list" id="incident-list"></aside>
-
+    <aside class="rail" id="rail" data-empty="true">
+      <div class="rail-head">
+        <span class="rail-title">Active incidents</span>
+        <span class="rail-count" id="rail-count">0</span>
+      </div>
+      <div class="rail-list" id="rail-list"></div>
+      <div class="rail-empty" id="rail-empty">
+        <div class="rail-empty-dot"></div>
+        <div class="rail-empty-label">No incidents</div>
+      </div>
+    </aside>
   </main>
 
   <script src="/app.js"></script>
