@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <meta name="theme-color" content="#00913F"/>
+  <title>Operations Center — Configure topology</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+  <link rel="stylesheet"
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&display=swap"/>
+  <link rel="stylesheet" href="/styles.css"/>
+  <link rel="stylesheet" href="/config.css"/>
+</head>
+<body class="cfg-body">
+
+  <header class="topbar">
+    <div class="brand">
+      <div class="brand-logo">TU</div>
+      <div class="brand-pill">Configure topology</div>
+    </div>
+    <div class="bar-right">
+      <a class="bar-chip bar-chip-link" href="/">Back to dashboard</a>
+    </div>
+  </header>
+
+  <main class="cfg-main">
+
+    <section class="cfg-col">
+      <div class="cfg-card">
+        <div class="cfg-card-head">
+          <h2>Levels</h2>
+          <span class="cfg-hint">Horizontal bands, top → bottom</span>
+        </div>
+        <form id="tier-form" class="cfg-form">
+          <input name="slug"  placeholder="slug (e.g. channels)" required pattern="[a-z0-9][a-z0-9-]*"/>
+          <input name="label" placeholder="label (e.g. Channels)" required maxlength="80"/>
+          <button type="submit">Add level</button>
+        </form>
+        <ul id="tier-list" class="cfg-list"></ul>
+      </div>
+    </section>
+
+    <section class="cfg-col">
+      <div class="cfg-card">
+        <div class="cfg-card-head">
+          <h2>Processes</h2>
+          <span class="cfg-hint">Nodes in the topology</span>
+        </div>
+        <form id="service-form" class="cfg-form">
+          <input name="id"    placeholder="id slug (e.g. order-api)" required pattern="[a-z0-9][a-z0-9-]*"/>
+          <input name="label" placeholder="label (e.g. Order API)" required maxlength="80"/>
+          <select name="tierId" required></select>
+          <input name="col" type="number" min="0" placeholder="col (optional)"/>
+          <button type="submit">Add process</button>
+        </form>
+        <ul id="service-list" class="cfg-list"></ul>
+      </div>
+    </section>
+
+    <section class="cfg-col">
+      <div class="cfg-card">
+        <div class="cfg-card-head">
+          <h2>Lines</h2>
+          <span class="cfg-hint">Dependency: from → to</span>
+        </div>
+        <form id="dep-form" class="cfg-form">
+          <select name="from" required></select>
+          <span class="cfg-arrow">→</span>
+          <select name="to" required></select>
+          <button type="submit">Add line</button>
+        </form>
+        <ul id="dep-list" class="cfg-list"></ul>
+      </div>
+    </section>
+
+  </main>
+
+  <div id="toast" class="cfg-toast" hidden></div>
+
+  <script src="/config.js"></script>
+</body>
+</html>

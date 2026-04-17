@@ -119,6 +119,12 @@ html, body {
   font-size: 13px;
   font-weight: 500;
 }
+.bar-chip-link {
+  color: var(--on-brand);
+  text-decoration: none;
+}
+.bar-chip-link:hover { background: rgba(255,255,255,0.12); }
+
 .sync-dot {
   width: 7px; height: 7px; border-radius: 50%;
   background: #B9DFC6;

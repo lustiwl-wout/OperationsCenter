@@ -1,9 +1,9 @@
-// Operations Center — mock data provider.
-// Service topology modelled on a technical wholesaler like Technische Unie:
-// B2B channels (web, mobile, EDI, punchout, branch terminals) → core APIs →
-// business services (pricing, availability across 43 DCs, credit check) →
-// operations (WMS, dispatch, transport, invoicing) → systems of record
-// (SAP ERP, CRM, PIM, stock).
+// Operations Center — live snapshot provider.
+// Topology (tiers / services / dependencies) is loaded from Postgres via
+// src/topology.js. Incident signals are still synthesized for now — they
+// decorate whichever services happen to exist in the database.
+
+const { getTopology } = require('./topology');
 
 const TOOLS = [
   { id: 'datadog',     name: 'Datadog',       icon: 'DD', color: '#774AA4' },
@@ -24,74 +24,14 @@ const TOOLS = [
 ];
 const TOOL_MAP = Object.fromEntries(TOOLS.map(t => [t.id, t]));
 
-// -----------------------------------------------------------------------
-// Service topology — technical wholesaler.
-// Tiers (top → bottom):
-//   0 channels   — entry points customers and staff use
-//   1 core-api   — request handlers / orchestration
-//   2 business   — domain services (pricing, availability, credit, catalog)
-//   3 ops        — fulfilment / back-office workers
-//   4 data       — systems of record (SAP ERP, CRM, MDM, stock)
-// -----------------------------------------------------------------------
-
-const SERVICES = [
-  // ---- Channels (tier 0) ----
-  { id: 'web-portal',        label: 'Web Portal',   tier: 0, col: 0, deps: ['catalog-api', 'order-api', 'customer-api', 'search'] },
-  { id: 'mobile-app',        label: 'Mobile App',   tier: 0, col: 1, deps: ['catalog-api', 'order-api', 'search'] },
-  { id: 'branch-terminal',   label: 'Branch POS',   tier: 0, col: 2, deps: ['catalog-api', 'order-api', 'availability'] },
-  { id: 'edi-gateway',       label: 'EDI Gateway',  tier: 0, col: 3, deps: ['order-api', 'pricing-engine'] },
-  { id: 'punchout',          label: 'Punchout',     tier: 0, col: 4, deps: ['catalog-api', 'order-api'] },
-
-  // ---- Core APIs (tier 1) ----
-  { id: 'order-api',         label: 'Order API',    tier: 1, col: 0, deps: ['pricing-engine', 'availability', 'credit-check'] },
-  { id: 'catalog-api',       label: 'Catalog API',  tier: 1, col: 1, deps: ['pim', 'search'] },
-  { id: 'pricing-engine',    label: 'Pricing',      tier: 1, col: 2, deps: ['customer-crm', 'sap-erp'] },
-  { id: 'customer-api',      label: 'Customer API', tier: 1, col: 3, deps: ['customer-crm'] },
-
-  // ---- Business services (tier 2) ----
-  { id: 'search',            label: 'Search',       tier: 2, col: 0, deps: ['pim'] },
-  { id: 'availability',      label: 'Availability', tier: 2, col: 1, deps: ['stock-db'] },
-  { id: 'credit-check',      label: 'Credit Check', tier: 2, col: 2, deps: ['customer-crm', 'sap-erp'] },
-  { id: 'quote-engine',      label: 'Quotes',       tier: 2, col: 3, deps: ['pricing-engine'] },
-  { id: 'pim',               label: 'PIM',          tier: 2, col: 4, deps: ['product-mdm'] },
-
-  // ---- Operations (tier 3) ----
-  { id: 'wms',               label: 'WMS',          tier: 3, col: 0, deps: ['stock-db', 'sap-erp'] },
-  { id: 'dispatch',          label: 'Dispatch',     tier: 3, col: 1, deps: ['transport'] },
-  { id: 'transport',         label: 'Transport',    tier: 3, col: 2, deps: [] },
-  { id: 'invoicing',         label: 'Invoicing',    tier: 3, col: 3, deps: ['sap-erp', 'customer-crm'] },
-  { id: 'replenishment',     label: 'Replenish',    tier: 3, col: 4, deps: ['stock-db', 'sap-erp'] },
-
-  // ---- Data (tier 4) ----
-  { id: 'sap-erp',           label: 'SAP ERP',      tier: 4, col: 0, deps: [] },
-  { id: 'product-mdm',       label: 'Product MDM',  tier: 4, col: 1, deps: [] },
-  { id: 'stock-db',          label: 'Stock DB',     tier: 4, col: 2, deps: [] },
-  { id: 'customer-crm',      label: 'CRM',          tier: 4, col: 3, deps: [] },
-];
-
-const TIER_LABELS = ['Channels', 'Core APIs', 'Business', 'Operations', 'Systems of Record'];
-
-// Dutch branches / datacenter regions — fits TU's 43-branch NL footprint.
 const REGIONS = ['nl-hoofddorp', 'nl-strijen-dc', 'nl-amsterdam', 'nl-eindhoven', 'nl-rotterdam', 'azure-weu'];
 
-// TU-realistic incidents — each fails a specific service so the topology
-// tells a coherent story on screen.
-const INCIDENT_TEMPLATES = [
-  { severity: 'P1', service: 'sap-erp',        title: 'SAP ERP unreachable from core APIs',  toolId: 'sapfocused' },
-  { severity: 'P1', service: 'pricing-engine', title: 'Pricing engine timeouts > 8s',        toolId: 'datadog' },
-  { severity: 'P1', service: 'order-api',      title: 'Order API 5xx spike',                 toolId: 'pagerduty' },
-  { severity: 'P1', service: 'stock-db',       title: 'Stock DB replication lag > 120s',     toolId: 'azuremon' },
-  { severity: 'P1', service: 'edi-gateway',    title: 'EDI gateway rejecting B2B messages',  toolId: 'splunk' },
-  { severity: 'P2', service: 'availability',   title: 'Availability: stale stock snapshots', toolId: 'newrelic' },
-  { severity: 'P2', service: 'dispatch',       title: 'Dispatch: route optimizer slow',      toolId: 'dynatrace' },
-  { severity: 'P2', service: 'pim',            title: 'PIM: product sync delayed 45m',       toolId: 'sentry' },
-  { severity: 'P2', service: 'credit-check',   title: 'Credit check provider latency high',  toolId: 'appdynamics' },
-  { severity: 'P2', service: 'wms',            title: 'WMS: pick queue backing up',          toolId: 'zabbix' },
-  { severity: 'P3', service: 'search',         title: 'Search: relevance degraded',          toolId: 'elastic' },
-  { severity: 'P3', service: 'mobile-app',     title: 'Mobile app: elevated error rate',     toolId: 'sentry' },
-  { severity: 'P3', service: 'invoicing',      title: 'Invoicing batch: 12m behind',         toolId: 'prometheus' },
-  { severity: 'P3', service: 'replenishment',  title: 'Replenishment: 1 supplier feed slow', toolId: 'solarwinds' },
-];
+const SEVERITIES = ['P1', 'P2', 'P3'];
+const TITLE_BY_SEV = {
+  P1: svc => `${svc} failure — customer traffic affected`,
+  P2: svc => `${svc} degraded — elevated error rate`,
+  P3: svc => `${svc} notice — minor anomaly`,
+};
 
 function rand(seed) {
   const x = Math.sin(seed) * 10000;
@@ -99,16 +39,20 @@ function rand(seed) {
 }
 function pick(seed, arr) { return arr[Math.floor(rand(seed) * arr.length)]; }
 
-// Walk the service graph upward (toward consumers) from failing IDs to
+// Walk the dependency graph upward (toward consumers) from failing IDs to
 // compute the blast radius.
-function computeImpact(failingIds) {
+function computeImpact(services, failingIds) {
   const impacted = new Set(failingIds);
+  const depsByService = new Map();
+  services.forEach(s => depsByService.set(s.id, s.deps || []));
+
   let changed = true;
   while (changed) {
     changed = false;
-    for (const s of SERVICES) {
+    for (const s of services) {
       if (impacted.has(s.id)) continue;
-      if (s.deps.some(d => impacted.has(d))) {
+      const deps = depsByService.get(s.id) || [];
+      if (deps.some(d => impacted.has(d))) {
         impacted.add(s.id);
         changed = true;
       }
@@ -117,40 +61,74 @@ function computeImpact(failingIds) {
   return impacted;
 }
 
-function getSnapshot() {
-  const tick = Math.floor(Date.now() / 20000);
+function buildServiceView(topology) {
+  // Flatten tiers to their ordering index, and inline each service's deps
+  // as an array of target service IDs.
+  const tierById = new Map(topology.tiers.map((t, i) => [t.id, { ...t, index: i }]));
+  const depsByFrom = new Map();
+  topology.dependencies.forEach(d => {
+    if (!depsByFrom.has(d.from)) depsByFrom.set(d.from, []);
+    depsByFrom.get(d.from).push(d.to);
+  });
+  return topology.services.map(s => ({
+    id: s.id,
+    label: s.label,
+    tier: tierById.get(s.tierId)?.index ?? 0,
+    col: s.col,
+    deps: depsByFrom.get(s.id) || [],
+  }));
+}
 
-  // Pick a stable-ish set of active incidents.
-  const activeIncidents = [];
-  // Guaranteed P1 (rotate between pricing / order / stock / edi).
-  const p1Pool = INCIDENT_TEMPLATES.filter(i => i.severity === 'P1' && i.service !== 'sap-erp');
-  activeIncidents.push({ ...p1Pool[Math.floor(rand(tick) * p1Pool.length)] });
-  // A few more incidents of mixed severity.
-  const extraCount = 2 + Math.floor(rand(tick + 1) * 2);
-  for (let i = 0; i < extraCount; i++) {
-    const t = INCIDENT_TEMPLATES[Math.floor(rand(tick + i + 7) * INCIDENT_TEMPLATES.length)];
-    if (!activeIncidents.some(a => a.service === t.service)) {
-      activeIncidents.push({ ...t });
-    }
+async function getSnapshot() {
+  const topology = await getTopology();
+  const services = buildServiceView(topology);
+  const tierLabels = topology.tiers.map(t => t.label);
+
+  // If the operator hasn't configured anything yet, return an empty-but-valid
+  // snapshot so the dashboard stays rendered.
+  if (!services.length) {
+    return {
+      generatedAt: new Date().toISOString(),
+      overall: 'healthy',
+      totals: { p1: 0, p2: 0, p3: 0 },
+      tierLabels,
+      services: [],
+      incidents: [],
+    };
   }
 
-  // Attach metadata.
-  activeIncidents.forEach((inc, i) => {
-    const seed = tick + i * 11;
-    inc.id = `INC-${(tick % 1000) * 10 + i}`;
-    inc.region = pick(seed, REGIONS);
-    const tool = TOOL_MAP[inc.toolId];
-    inc.toolName = tool.name;
-    inc.toolColor = tool.color;
-    inc.toolIcon = tool.icon;
-    inc.reporters = TOOLS
-      .filter(t => t.id !== inc.toolId && rand(seed + t.id.charCodeAt(0)) > 0.75)
-      .slice(0, 2)
-      .map(t => ({ id: t.id, name: t.name, color: t.color, icon: t.icon }));
-    inc.openedAt = new Date(Date.now() - Math.floor(rand(seed) * (inc.severity === 'P1' ? 600 : 2700)) * 1000).toISOString();
-  });
+  const tick = Math.floor(Date.now() / 20000);
 
-  // Primary failing services.
+  // Synthesize incidents against real service IDs. Stable per tick.
+  const serviceIds = services.map(s => s.id);
+  const incidentCount = Math.min(serviceIds.length, 1 + Math.floor(rand(tick) * 4));
+  const activeIncidents = [];
+  const used = new Set();
+  for (let i = 0; i < incidentCount * 3 && activeIncidents.length < incidentCount; i++) {
+    const svc = serviceIds[Math.floor(rand(tick + i * 13) * serviceIds.length)];
+    if (used.has(svc)) continue;
+    used.add(svc);
+    const sev = SEVERITIES[Math.min(2, Math.floor(rand(tick + i * 17) * 3.2))];
+    const tool = TOOLS[Math.floor(rand(tick + i * 19) * TOOLS.length)];
+    activeIncidents.push({
+      id: `INC-${(tick % 1000) * 10 + activeIncidents.length}`,
+      severity: sev,
+      service: svc,
+      title: TITLE_BY_SEV[sev](services.find(s => s.id === svc).label),
+      toolId: tool.id,
+      toolName: tool.name,
+      toolColor: tool.color,
+      toolIcon: tool.icon,
+      region: pick(tick + i * 23, REGIONS),
+      reporters: TOOLS
+        .filter(t => t.id !== tool.id && rand(tick + i + t.id.charCodeAt(0)) > 0.78)
+        .slice(0, 2)
+        .map(t => ({ id: t.id, name: t.name, color: t.color, icon: t.icon })),
+      openedAt: new Date(Date.now() - Math.floor(rand(tick + i) * (sev === 'P1' ? 600 : 2700)) * 1000).toISOString(),
+    });
+  }
+
+  // Primary failing services (strongest severity wins per service).
   const failingBySeverity = {};
   activeIncidents.forEach(inc => {
     const current = failingBySeverity[inc.service];
@@ -159,9 +137,9 @@ function getSnapshot() {
     }
   });
   const failingIds = Object.keys(failingBySeverity);
-  const impactedIds = computeImpact(failingIds);
+  const impactedIds = computeImpact(services, failingIds);
 
-  const services = SERVICES.map(s => {
+  const servicesOut = services.map(s => {
     let status = 'healthy';
     if (failingBySeverity[s.id]) {
       const sev = failingBySeverity[s.id].severity;
@@ -194,10 +172,10 @@ function getSnapshot() {
     generatedAt: new Date().toISOString(),
     overall,
     totals,
-    tierLabels: TIER_LABELS,
-    services,
+    tierLabels,
+    services: servicesOut,
     incidents: activeIncidents.sort((a, b) => a.severity.localeCompare(b.severity)),
   };
 }
 
-module.exports = { getSnapshot, TOOLS, SERVICES, TIER_LABELS };
+module.exports = { getSnapshot, TOOLS };
