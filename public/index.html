@@ -1,181 +1,52 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <meta name="theme-color" content="#00913F" />
-  <title>Operations Center — Aggregated Monitoring</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link rel="stylesheet"
-        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" />
-  <link rel="stylesheet" href="/styles.css" />
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <meta name="theme-color" content="#00913F"/>
+  <title>Operations Center</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500&display=swap"/>
+  <link rel="stylesheet" href="/styles.css"/>
 </head>
 <body>
-  <!-- Subtle P1 edge indicator (thin red frame when P1 > 0) -->
-  <div id="p1-frame" class="p1-frame" aria-hidden="true"></div>
 
-  <header class="topbar">
-    <div class="topbar-main">
-      <div class="brand">
-        <div class="brand-logo" aria-hidden="true"><span>OC</span></div>
-        <div class="brand-pill">Operations Center</div>
-      </div>
-
-      <div class="status-pill" id="overall-pill">
-        <span class="status-dot"></span>
-        <span class="status-label" id="overall-label">Loading…</span>
-      </div>
-
-      <div class="topbar-right">
-        <div class="header-btn" title="Local time">
-          <div class="header-btn-label">Local</div>
-          <div class="header-btn-value mono" id="clock">--:--:--</div>
-        </div>
-        <div class="header-btn" title="UTC time">
-          <div class="header-btn-label">UTC</div>
-          <div class="header-btn-value mono" id="clock-utc">--:--:--</div>
-        </div>
-        <div class="header-btn" title="Last sync">
-          <div class="header-btn-label">Last sync</div>
-          <div class="header-btn-value mono" id="last-sync">—</div>
-        </div>
-      </div>
+  <!-- Minimal top bar -->
+  <header class="bar">
+    <div class="bar-brand">
+      <span class="bar-logo">OC</span>
+      <span class="bar-name">Operations Center</span>
     </div>
-
-    <nav class="topbar-nav" aria-label="Dashboard sections">
-      <a class="nav-link active" href="#overview">Overview</a>
-      <a class="nav-link" href="#sources">Monitoring sources</a>
-      <a class="nav-link" href="#alerts">Alerts</a>
-      <a class="nav-link" href="#incidents">Incidents</a>
-      <span class="nav-sub">Aggregated monitoring · 15 sources</span>
-    </nav>
+    <div class="bar-status" id="bar-status" data-status="healthy">
+      <span class="bar-dot"></span>
+      <span id="bar-label">—</span>
+    </div>
+    <div class="bar-meta">
+      <span class="mono" id="clock">—</span>
+      <span class="bar-sync mono" id="bar-sync">·</span>
+    </div>
   </header>
 
-  <!-- P1 banner: hidden unless there's a live P1 incident -->
-  <section id="p1-banner" class="p1-banner hidden" role="alert" aria-live="assertive">
-    <div class="p1-banner-inner">
-      <div class="p1-siren" aria-hidden="true">
-        <svg viewBox="0 0 24 24" width="24" height="24">
-          <path fill="currentColor" d="M12 2a7 7 0 0 0-7 7v4H3v3h18v-3h-2V9a7 7 0 0 0-7-7Zm-2 18a2 2 0 1 0 4 0h-4Z"/>
-        </svg>
-      </div>
-      <div class="p1-banner-text">
-        <div class="p1-label">Priority 1 · Immediate action</div>
-        <div class="p1-title" id="p1-title">—</div>
-        <div class="p1-meta" id="p1-meta">—</div>
-      </div>
-      <div class="p1-count" id="p1-count">0</div>
-    </div>
-  </section>
+  <!-- ALL-CLEAR state: shown when overall === healthy -->
+  <div class="all-clear" id="all-clear">
+    <div class="pulse-ring" aria-hidden="true"></div>
+    <div class="all-clear-dot" aria-hidden="true"></div>
+    <p class="all-clear-label">All clear</p>
+  </div>
 
-  <main class="layout">
-    <!-- Hero panel: donut + headline + compact stats + 24h timeline -->
-    <section class="hero" id="hero" data-status="healthy">
-      <div class="hero-left">
-        <div class="donut" aria-hidden="true">
-          <svg viewBox="0 0 120 120" width="120" height="120" id="donut-svg">
-            <circle cx="60" cy="60" r="48" fill="none" stroke="var(--border)" stroke-width="10"/>
-            <g id="donut-segments"></g>
-          </svg>
-          <div class="donut-center">
-            <div class="donut-main"><span id="donut-healthy">0</span><span class="donut-of">/<span id="donut-total">15</span></span></div>
-            <div class="donut-sub">healthy</div>
-          </div>
-        </div>
+  <!-- INCIDENT state: shown when there are any P1 / P2 / P3 alerts -->
+  <main class="stage hidden" id="stage">
 
-        <div class="hero-text">
-          <div class="hero-eyebrow" id="hero-eyebrow">Overall status</div>
-          <div class="hero-headline" id="hero-headline">Checking…</div>
-          <div class="hero-sub" id="hero-sub">—</div>
-        </div>
-      </div>
-
-      <div class="hero-stats">
-        <div class="mini-stat" data-tone="p1">
-          <div class="mini-stat-label">Priority 1</div>
-          <div class="mini-stat-value" id="stat-p1">0</div>
-        </div>
-        <div class="mini-stat" data-tone="p2">
-          <div class="mini-stat-label">Priority 2</div>
-          <div class="mini-stat-value" id="stat-p2">0</div>
-        </div>
-        <div class="mini-stat" data-tone="p3">
-          <div class="mini-stat-label">Priority 3</div>
-          <div class="mini-stat-value" id="stat-p3">0</div>
-        </div>
-        <div class="mini-stat" data-tone="ok">
-          <div class="mini-stat-label">MTTR · 24h</div>
-          <div class="mini-stat-value"><span id="stat-mttr">—</span><span class="mini-stat-unit">m</span></div>
-        </div>
-      </div>
-
-      <div class="hero-timeline">
-        <div class="hero-timeline-head">
-          <span class="hero-timeline-title">Incidents · last 24h</span>
-          <div class="hero-timeline-legend">
-            <span class="leg p1"><i></i>P1</span>
-            <span class="leg p2"><i></i>P2</span>
-            <span class="leg p3"><i></i>P3</span>
-          </div>
-        </div>
-        <div id="timeline-chart" class="timeline-chart"></div>
-      </div>
+    <!-- Incident constellation: SVG drawn by JS -->
+    <section class="constellation-wrap">
+      <canvas id="constellation" aria-label="Incident impact map"></canvas>
     </section>
 
-    <!-- Needs-attention zone: only rendered when critical/warning tools exist -->
-    <section class="panel attention-panel hidden" id="attention-panel">
-      <div class="panel-head">
-        <div class="panel-title">
-          <span class="panel-title-dot crit"></span>
-          Needs attention
-        </div>
-        <div class="panel-sub" id="attention-count">0 sources</div>
-      </div>
-      <div class="attention-grid" id="attention-grid"></div>
-    </section>
+    <!-- Incident list: minimal — one row per open incident, no body text -->
+    <aside class="incident-list" id="incident-list"></aside>
 
-    <!-- Main grid: operational tiles + live alerts feed -->
-    <section class="main-grid">
-      <div class="panel operational-panel">
-        <div class="panel-head">
-          <div class="panel-title">
-            <span class="panel-title-dot ok"></span>
-            All sources
-          </div>
-          <div class="panel-legend">
-            <span class="legend-item"><span class="legend-dot ok"></span>Healthy</span>
-            <span class="legend-item"><span class="legend-dot notice"></span>Notice</span>
-            <span class="legend-item"><span class="legend-dot warning"></span>Warning</span>
-            <span class="legend-item"><span class="legend-dot critical"></span>Critical</span>
-          </div>
-        </div>
-        <div class="tiles-grid" id="tiles-grid"><!-- tiles injected here --></div>
-      </div>
-
-      <aside class="panel alerts-panel">
-        <div class="panel-head">
-          <div class="panel-title">Live alert feed</div>
-          <div class="panel-sub mono" id="alerts-count">0 open</div>
-        </div>
-        <div class="alerts-list" id="alerts-list"><!-- alerts injected here --></div>
-      </aside>
-    </section>
   </main>
-
-  <footer class="footer">
-    <div class="footer-left">
-      <span class="mono">OC · v0.1.0</span>
-      <span class="sep">·</span>
-      <span>Render</span>
-      <span class="sep">·</span>
-      <span>Neon Postgres</span>
-    </div>
-    <div class="footer-right mono">
-      <span id="tick-indicator" class="tick-dot" aria-hidden="true"></span>
-      <span id="refresh-status">idle</span>
-    </div>
-  </footer>
 
   <script src="/app.js"></script>
 </body>
