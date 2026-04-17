@@ -106,9 +106,8 @@ function sparklineSVG(values, status) {
         </linearGradient>
       </defs>
       <path d="${path} L${w - 2},${h - 2} L2,${h - 2} Z" fill="url(#g-${status})" />
-      <path d="${path}" fill="none" stroke="${stroke}" stroke-width="1.6"
-            stroke-linecap="round" stroke-linejoin="round"
-            style="filter: drop-shadow(0 0 3px ${stroke});"/>
+      <path d="${path}" fill="none" stroke="${stroke}" stroke-width="1.5"
+            stroke-linecap="round" stroke-linejoin="round"/>
     </svg>`;
 }
 
@@ -137,11 +136,11 @@ function toolCardHTML(tool) {
       <div class="tool-metrics">
         <div class="metric">
           <div class="metric-label">Latency</div>
-          <div class="metric-value">${latencyMs}<span style="font-size:10px;color:var(--text-mute);"> ms</span></div>
+          <div class="metric-value">${latencyMs}<span class="metric-unit">ms</span></div>
         </div>
         <div class="metric">
           <div class="metric-label">Uptime</div>
-          <div class="metric-value">${uptimePct.toFixed(2)}<span style="font-size:10px;color:var(--text-mute);">%</span></div>
+          <div class="metric-value">${uptimePct.toFixed(2)}<span class="metric-unit">%</span></div>
         </div>
         <div class="metric">
           <div class="metric-label">Events/min</div>
